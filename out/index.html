@@ -1,0 +1,1581 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OLO · Costeo Última Milla · CR 2026</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Manrope', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'monospace'],
+        },
+        colors: {
+          navy:   '#1A1A1A',
+          navy2:  '#222222',
+          steel:  '#475569',
+          prop:   '#00B49E',
+          terc:   '#007B6E',
+          accent: '#00D4BA',
+          mist:   '#f1f5f9',
+        }
+      }
+    }
+  }
+</script>
+<style>
+  body{ background:#EEF6F5; }
+  .card{ background:#fff; border:1px solid #e2e8f0; box-shadow:0 1px 2px rgba(11,31,58,.05), 0 14px 36px -26px rgba(11,31,58,.4); }
+  .tabular{ font-variant-numeric:tabular-nums; }
+  input[type=range]{ -webkit-appearance:none; appearance:none; height:6px; border-radius:999px; background:#B3DDD8; outline:none; }
+  input[type=range]::-webkit-slider-thumb{ -webkit-appearance:none; height:20px; width:20px; border-radius:50%; background:#00B49E; border:3px solid #FFFFFF; box-shadow:0 2px 6px rgba(0,180,158,.5); cursor:pointer; }
+  input[type=range]::-moz-range-thumb{ height:20px; width:20px; border-radius:50%; background:#00B49E; border:3px solid #FFFFFF; cursor:pointer; }
+  .nfield{ transition:box-shadow .15s, border-color .15s; }
+  .nfield:focus{ border-color:#00B49E; box-shadow:0 0 0 3px rgba(0,180,158,.25); outline:none; }
+  .badge{ letter-spacing:.1em; }
+  .pop{ animation:pop .35s cubic-bezier(.2,.7,.3,1) both; }
+  @keyframes pop{ from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;} }
+  .chk{ accent-color:#00B49E; width:18px; height:18px; cursor:pointer; }
+  .chk:disabled{ cursor:not-allowed; opacity:.5; }
+  .bar,.util-bar{ transition:width .5s cubic-bezier(.2,.7,.3,1); }
+
+  /* Tabs */
+  .tab-btn{ transition:color .15s, border-color .15s, background .15s; }
+  .tab-btn.active{ color:#00B49E; border-bottom-color:#00B49E; background:#fff; }
+  .tab-panel{ display:none; }
+  .tab-panel.active{ display:block; }
+
+  /* Editable tables */
+  .edit-input{
+    width:100%; background:transparent; border:none; outline:none;
+    font-family:'IBM Plex Mono',monospace; font-size:.78rem;
+    color:#1A1A1A; padding:2px 4px; border-radius:4px;
+    transition:background .15s, box-shadow .15s;
+  }
+  .edit-input:focus{ background:#f0faf9; box-shadow:0 0 0 2px #00B49E66; }
+  .edit-input.text-input{ font-family:'Manrope',sans-serif; }
+  .del-btn{
+    width:22px; height:22px; border-radius:50%; border:none; cursor:pointer;
+    background:#fee2e2; color:#dc2626; font-size:14px; line-height:1;
+    transition:background .15s; display:grid; place-content:center;
+  }
+  .del-btn:hover{ background:#fca5a5; }
+  .add-btn{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:.75rem; font-weight:700; color:#00B49E;
+    background:#f0faf9; border:1px solid #b3e8e3; border-radius:8px;
+    padding:6px 14px; cursor:pointer; transition:background .15s;
+  }
+  .add-btn:hover{ background:#ccf0eb; }
+  tbody tr:nth-child(odd){ background:#f8fafc; }
+  tbody tr:hover{ background:#f1f5f9; }
+
+  /* Hours track */
+  .hours-track{ position:relative;height:6px;border-radius:999px;overflow:visible;
+    background:linear-gradient(to right,#00B49E 0%,#00B49E 75%,#dc2626 75%,#dc2626 100%); }
+  .hours-marker{ position:absolute;top:-16px;left:75%;transform:translateX(-50%);
+    font-size:9px;font-family:'IBM Plex Mono',monospace;color:#007B6E;font-weight:700;white-space:nowrap; }
+  .hours-marker::after{ content:'';display:block;width:1px;height:10px;background:#007B6E;margin:1px auto 0; }
+
+  /* Export buttons */
+  .export-btn{
+    display:inline-flex;align-items:center;gap:6px;font-size:.75rem;font-weight:700;
+    border-radius:8px;padding:7px 14px;cursor:pointer;transition:all .15s;border:none;
+  }
+  .export-btn-pdf{ background:#009B8D;color:#fff; }
+  .export-btn-pdf:hover{ background:#007B6E; }
+  .export-btn-csv{ background:#f0faf9;color:#009B8D;border:1.5px solid #99DDD5; }
+  .export-btn-csv:hover{ background:#ccf0eb; }
+
+  /* ── Print / PDF styles ── */
+  .print-only{ display:none; }
+  @media print{
+    body{ background:#fff !important; display:block !important; }
+    aside{ display:none !important; }
+    .no-print{ display:none !important; }
+    .print-only{ display:block !important; }
+    main{ padding:0 !important; max-width:100% !important; }
+    .tab-panel{ display:block !important; }
+    #tab-fijos, #tab-variables{ display:none !important; }
+    .card{ box-shadow:none !important; border:1px solid #ddd !important; break-inside:avoid; }
+    .pop{ animation:none !important; }
+    details summary{ display:none; }
+    details[open] .overflow-x-auto, details .overflow-x-auto{ display:block !important; max-height:none !important; }
+    details{ display:block !important; }
+    /* Print header */
+    .print-header{
+      display:flex !important; align-items:center; justify-content:space-between;
+      padding:12px 0 16px; border-bottom:2px solid #009B8D; margin-bottom:20px;
+    }
+    .print-header .print-logo-area{ display:flex; align-items:center; gap:10px; }
+    .print-header .print-meta{ text-align:right; font-size:10px; color:#555; }
+    .print-header .print-ruta{ font-size:18px; font-weight:800; color:#1A1A1A; }
+    .print-header .print-sub{ font-size:11px; color:#009B8D; font-weight:600; margin-top:2px; }
+    h3{ font-size:13px !important; }
+    p,span,td,th{ font-size:11px !important; }
+    .text-3xl,.text-2xl{ font-size:18px !important; }
+    .text-xl{ font-size:14px !important; }
+    @page{ margin:15mm 12mm; }
+  }
+</style>
+</head>
+<body class="font-sans text-navy min-h-screen lg:flex">
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="lg:w-[340px] lg:min-h-screen bg-white text-[#1A1A1A] lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto border-r border-[#D0EAE6]" style="background:#FAFEFE;">
+  <div class="p-6">
+    <div class="flex items-center gap-3 mb-7">
+      <!-- OLO Logo SVG — fiel al logo real -->
+      <svg width="64" height="44" viewBox="0 0 64 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Left square: white fill, thick dark border -->
+        <rect x="1.5" y="1.5" width="22" height="22" rx="3.5" fill="white" stroke="#111" stroke-width="4"/>
+        <!-- L connector: vertical bar -->
+        <rect x="27" y="1.5" width="4" height="32" rx="2" fill="#111"/>
+        <!-- L connector: horizontal foot -->
+        <rect x="27" y="30" width="35" height="4" rx="2" fill="#111"/>
+        <!-- Right square: teal fill, thick dark border -->
+        <rect x="35" y="1.5" width="22" height="22" rx="3.5" fill="#009B8D" stroke="#111" stroke-width="4"/>
+      </svg>
+      <div>
+        <h1 class="font-extrabold text-base leading-tight text-[#1A1A1A]">Costeo Última Milla</h1>
+        <p class="text-[#00B49E] text-[11px] font-semibold">Costa Rica · 2026</p>
+      </div>
+    </div>
+
+    <!-- Web data status bar -->
+    <div id="webStatusBar" class="flex items-center justify-between rounded-lg border px-3 py-2 mb-3" 
+         style="background:#f0faf9;border-color:#B3DDD8;">
+      <div class="flex items-center gap-2">
+        <span id="webStatusDot" style="width:8px;height:8px;border-radius:50%;background:#94a3b8;display:inline-block;flex-shrink:0"></span>
+        <span id="webStatusText" class="text-[11px] text-[#555]">Conectando a Supabase…</span>
+      </div>
+      <button onclick="actualizarDatosWeb(true)" title="Refrescar TC y precio diesel"
+              style="background:none;border:none;cursor:pointer;color:#00B49E;font-size:14px;line-height:1;padding:2px 4px;"
+              id="refreshBtn">↻</button>
+    </div>
+
+    <p class="text-[11px] uppercase badge text-[#00B49E] mb-3 font-semibold tracking-widest">Parámetros de la Ruta</p>
+
+    <label class="block text-xs font-semibold text-[#444] mb-1.5">Nombre / código de ruta</label>
+    <input id="routeName" type="text" value="RUTA-GAM-01"
+           class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm mb-4 text-[#1A1A1A] placeholder-[#A0B8B5]">
+
+    <label class="block text-xs font-semibold text-[#444] mb-1.5">Tipo de camión</label>
+    <select id="truckType" class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm mb-3 text-[#1A1A1A]">
+      <option value="t1">1 a 2.5 Toneladas</option>
+      <option value="t3" selected>3 a 4.5 Toneladas</option>
+      <option value="t5">5 a 7 Toneladas</option>
+    </select>
+
+    <!-- Capacidad + factores en un bloque compacto -->
+    <div class="rounded-lg bg-[#E8F7F5] border border-[#B3DDD8] px-3 py-2.5 mb-3 grid grid-cols-2 gap-2 text-center">
+      <div>
+        <p class="text-[10px] text-[#007B6E] uppercase badge font-semibold">Cap. Peso</p>
+        <p id="capPesoLbl" class="font-mono font-semibold text-accent text-sm">4,500 kg</p>
+      </div>
+      <div>
+        <p class="text-[10px] text-[#007B6E] uppercase badge font-semibold">Cap. Volumen</p>
+        <p id="capVolLbl" class="font-mono font-semibold text-accent text-sm">28 m³</p>
+      </div>
+    </div>
+
+    <!-- Factor de ocupación — aquí arriba para no perderlo -->
+    <div class="flex items-baseline justify-between mb-1">
+      <label class="text-xs font-semibold text-[#444]">Factor de ocupación</label>
+      <span class="font-mono text-sm font-semibold text-accent"><span id="factOcupLbl">85</span>%</span>
+    </div>
+    <input id="factOcup" type="range" min="50" max="100" step="1" value="85" class="w-full mb-1">
+    <div class="flex justify-between text-[10px] text-[#888] font-mono mb-4"><span>50%</span><span>100%</span></div>
+
+    <div class="flex items-center justify-between rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2.5 mb-4">
+      <label for="helper" class="text-sm font-medium select-none text-[#1A1A1A]">¿Requiere ayudante?</label>
+      <input id="helper" type="checkbox" class="chk">
+    </div>
+    <p id="helperNote" class="text-[11px] text-[#00B49E] font-semibold -mt-2 mb-4 hidden">Obligatorio para camiones de 3 a 7 Ton.</p>
+
+    <label class="block text-xs font-semibold text-[#444] mb-1.5">Kilómetros de la ruta</label>
+    <div class="relative mb-4">
+      <input id="km" type="number" min="0" step="1" value="120"
+             class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm font-mono text-[#1A1A1A]">
+      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#00B49E] font-mono font-bold">KM</span>
+    </div>
+
+    <div class="flex items-center justify-between mb-1.5">
+      <label class="block text-xs font-semibold text-[#444]">Precio del diésel</label>
+      <a href="https://www.recope.go.cr/productos/precios-nacionales/" target="_blank"
+         class="text-[10px] font-semibold text-[#00B49E] underline underline-offset-2 hover:text-[#007B6E]">Ver RECOPE ↗</a>
+    </div>
+    <div class="flex items-center gap-2 mb-2">
+      <div class="relative flex-1">
+        <input id="diesel" type="number" min="0" step="5" value="635"
+               class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm font-mono text-[#1A1A1A]">
+        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#00B49E] font-mono font-bold">₡ / L</span>
+      </div>
+    </div>
+    <p id="dieselStatusText" class="text-[10px] text-[#888] -mt-1 mb-4">Ingresá el precio manualmente o consultá RECOPE.</p>
+
+    <p class="text-[11px] uppercase badge text-[#00B49E] mb-3 font-semibold tracking-widest">Factor Tiempo</p>
+
+    <label class="block text-xs font-semibold text-[#444] mb-1.5">Días de la ruta
+      <span class="font-normal text-slate-500">· multiplica costo fijo</span></label>
+    <div class="relative mb-5">
+      <input id="dias" type="number" min="1" max="7" step="1" value="1"
+             class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm font-mono text-[#1A1A1A]">
+      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#00B49E] font-mono font-bold">días</span>
+    </div>
+
+    <div class="flex items-baseline justify-between mb-2">
+      <label class="text-xs font-semibold text-[#444]">Duración de la ruta</label>
+      <span class="font-mono text-sm font-semibold">
+        <span id="horasLbl" class="text-[#1A1A1A] font-bold">8</span><span class="text-[#888]"> h</span>
+        <span id="horasExtraChip" class="hidden ml-1 text-[10px] font-bold text-orange-400 bg-orange-900/40 px-1.5 py-0.5 rounded-full">+<span id="horasExtraQty">0</span>h extra</span>
+      </span>
+    </div>
+    <div class="relative mb-1 pt-5">
+      <div class="hours-marker">12h</div>
+      <div class="hours-track">
+        <input id="horas" type="range" min="1" max="16" step="1" value="8"
+               style="position:absolute;inset:0;width:100%;opacity:0;cursor:pointer;height:6px;margin:0;">
+        <div id="horasFill" class="absolute top-0 left-0 h-full rounded-full pointer-events-none" style="background:#00B49E" style="width:43.75%"></div>
+      </div>
+    </div>
+    <div class="flex justify-between text-[10px] text-[#888] font-mono mb-1"><span>1h</span><span class="text-red-500 font-semibold">↑ extras</span><span>16h</span></div>
+    <p class="text-[11px] text-[#888] mb-5">Jornada normal ≤ 12 h · extras de 12–16 h a 1.5×</p>
+
+    <p class="text-[11px] uppercase badge text-[#00B49E] mb-3 font-semibold tracking-widest">Parámetros de la Carga</p>
+
+    <label class="block text-xs font-semibold text-[#444] mb-1.5">Peso real de la carga</label>
+    <div class="relative mb-4">
+      <input id="cargaPeso" type="number" min="0" step="10" value="2000"
+             class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm font-mono text-[#1A1A1A]">
+      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#00B49E] font-mono font-bold">KG</span>
+    </div>
+
+    <label class="block text-xs font-semibold text-[#444] mb-1.5">Volumen de la carga</label>
+    <div class="relative mb-5">
+      <input id="cargaVol" type="number" min="0" step="0.5" value="12"
+             class="nfield w-full rounded-lg bg-[#F0F8F7] border border-[#C0E0DB] px-3 py-2 text-sm font-mono text-[#1A1A1A]">
+      <span class="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-[#00B49E] font-mono font-bold">M³</span>
+    </div>
+
+    <div class="flex items-baseline justify-between mb-2">
+      <label class="text-xs font-semibold text-[#444]">Factor volumétrico</label>
+      <span class="font-mono text-sm font-semibold text-accent"><span id="factVolLbl">333</span> kg/m³</span>
+    </div>
+    <input id="factVol" type="range" min="200" max="500" step="1" value="333" class="w-full mb-1">
+    <div class="flex justify-between text-[10px] text-[#888] font-mono mb-5"><span>200</span><span>500</span></div>
+
+    <div class="rounded-lg bg-[#E8F7F5] border border-[#B3DDD8] p-3 text-[11px] text-[#555] leading-relaxed">
+      <p class="font-semibold text-[#007B6E] mb-1">Supuestos</p>
+      Costos fijos ÷ días operativos × días de ruta. Extras: (Salario ÷ días op. ÷ 8h) × 1.5 sobre 12h. Costos variables por KM. Combustible: KM ÷ rendimiento × precio diesel.
+    </div>
+  </div>
+</aside>
+
+<!-- ===== MAIN ===== -->
+<main class="flex-1 p-5 sm:p-7 max-w-5xl mx-auto w-full">
+
+  <!-- Print-only header (visible only in PDF/print) -->
+  <div class="print-only print-header">
+    <div class="print-logo-area">
+      <svg width="56" height="38" viewBox="0 0 64 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="1.5" y="1.5" width="22" height="22" rx="3.5" fill="white" stroke="#111" stroke-width="4"/>
+        <rect x="27" y="1.5" width="4" height="32" rx="2" fill="#111"/>
+        <rect x="27" y="30" width="35" height="4" rx="2" fill="#111"/>
+        <rect x="35" y="1.5" width="22" height="22" rx="3.5" fill="#009B8D" stroke="#111" stroke-width="4"/>
+      </svg>
+      <div>
+        <div class="print-ruta" id="printRutaTitle">Ruta</div>
+        <div class="print-sub">Costeo Última Milla · Costa Rica 2026</div>
+      </div>
+    </div>
+    <div class="print-meta">
+      <div id="printTruckLabel" style="font-weight:700;color:#009B8D;font-size:12px;"></div>
+      <div id="printDate" style="margin-top:2px;"></div>
+      <div id="tcDisplayPrint" style="margin-top:2px;">1 USD = ₡452</div>
+    </div>
+  </div>
+
+  <!-- Header (screen only) -->
+  <div class="flex items-center justify-between flex-wrap gap-2 mb-5 no-print">
+    <div>
+      <p class="text-[11px] uppercase badge text-steel font-semibold">Resumen ejecutivo</p>
+      <h2 id="routeTitle" class="font-extrabold text-2xl">Ruta</h2>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="exportarCSV()" class="export-btn export-btn-csv">
+        ⬇ CSV
+      </button>
+      <button onclick="exportarPDF()" class="export-btn export-btn-pdf">
+        🖨 Exportar PDF
+      </button>
+      <div class="text-right ml-2">
+        <p class="text-[10px] uppercase badge text-steel">Tipo de cambio</p>
+        <p id="tcDisplay" class="font-mono font-semibold text-prop tabular">1 USD = ₡452</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── TAB NAV ── -->
+  <div class="flex gap-1 border-b border-slate-200 mb-6 bg-slate-100 rounded-t-xl overflow-hidden">
+    <button onclick="switchTab('dashboard')" id="tab-btn-dashboard"
+            class="tab-btn active flex-1 py-3 px-4 text-sm font-bold border-b-2 border-transparent text-steel">
+      📊 Dashboard
+    </button>
+    <button onclick="switchTab('fijos')" id="tab-btn-fijos"
+            class="tab-btn flex-1 py-3 px-4 text-sm font-bold border-b-2 border-transparent text-steel">
+      📅 Costos Fijos
+    </button>
+    <button onclick="switchTab('variables')" id="tab-btn-variables"
+            class="tab-btn flex-1 py-3 px-4 text-sm font-bold border-b-2 border-transparent text-steel">
+      🛣 Costos Variables
+    </button>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       TAB 1: DASHBOARD
+       ══════════════════════════════════════════ -->
+  <div id="tab-dashboard" class="tab-panel active">
+
+    <!-- Tarjeta costo total -->
+    <div class="card rounded-2xl p-6 border-t-4 border-t-prop mb-5 pop">
+      <p class="text-[11px] uppercase badge text-prop font-bold mb-2">Transporte</p>
+      <p id="propCRC" class="font-extrabold text-3xl leading-none tabular">₡0</p>
+      <p id="propUSD" class="font-mono text-sm text-steel mt-1 tabular">$0.00</p>
+      <div class="mt-4 pt-4 border-t border-slate-100 flex items-baseline justify-between">
+        <span class="text-xs text-steel">Costo neto por KM</span>
+        <span id="propPerKM" class="font-mono font-semibold text-sm">₡0</span>
+      </div>
+    </div>
+
+    <!-- Cotización peso volumétrico -->
+    <div class="card rounded-2xl p-6 mb-5 pop" style="animation-delay:.06s">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="font-bold text-lg">Cotización por Peso Volumétrico</h3>
+        <span id="limitanteBadge" class="text-[11px] font-bold uppercase badge px-3 py-1 rounded-full bg-slate-100 text-steel">—</span>
+      </div>
+
+      <p class="text-[11px] uppercase badge text-steel font-semibold mb-3">Capacidad Efectiva del Camión</p>
+      <div class="grid grid-cols-2 gap-4 mb-5">
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <p class="text-[11px] text-steel uppercase badge font-semibold mb-1">Peso efectivo</p>
+          <p id="capEfPeso" class="font-mono font-bold text-xl text-navy">0 kg</p>
+          <p class="text-[11px] text-steel mt-0.5">cap. total × factor ocup.</p>
+        </div>
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <p class="text-[11px] text-steel uppercase badge font-semibold mb-1">Volumen efectivo</p>
+          <p id="capEfVol" class="font-mono font-bold text-xl text-navy">0 m³</p>
+          <p class="text-[11px] text-steel mt-0.5">cap. total × factor ocup.</p>
+        </div>
+      </div>
+
+      <p class="text-[11px] uppercase badge text-steel font-semibold mb-3">Análisis de la Carga</p>
+      <div class="grid grid-cols-3 gap-4 mb-5">
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <p class="text-[11px] text-steel uppercase badge font-semibold mb-1">Peso real</p>
+          <p id="resumenPesoReal" class="font-mono font-bold text-xl text-navy">0 kg</p>
+        </div>
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4">
+          <p class="text-[11px] text-steel uppercase badge font-semibold mb-1">Peso volumétrico</p>
+          <p id="resumenPesoVol" class="font-mono font-bold text-xl text-navy">0 kg</p>
+          <p class="text-[11px] text-steel mt-0.5">vol × factor</p>
+        </div>
+        <div class="rounded-xl bg-white border-2 border-prop p-4">
+          <p class="text-[11px] text-prop uppercase badge font-bold mb-1">Peso facturable</p>
+          <p id="resumenPesoFact" class="font-mono font-bold text-xl text-prop">0 kg</p>
+          <p class="text-[11px] text-steel mt-0.5">max(real, volumétrico)</p>
+        </div>
+      </div>
+
+      <p class="text-[11px] uppercase badge text-steel font-semibold mb-3">Costo Unitario de la Ruta</p>
+      <div class="grid grid-cols-2 gap-4 mb-5">
+        <div class="rounded-xl bg-prop/5 border border-prop/20 p-4">
+          <p class="text-[11px] text-prop uppercase badge font-bold mb-1">Costo / kg facturable</p>
+          <p id="costoKg" class="font-mono font-bold text-2xl text-prop">₡0</p>
+          <p id="costoKgUSD" class="font-mono text-xs text-steel mt-0.5">$0.00</p>
+        </div>
+        <div class="rounded-xl bg-terc/5 border border-terc/20 p-4">
+          <p class="text-[11px] text-terc uppercase badge font-bold mb-1">Costo / m³</p>
+          <p id="costoM3" class="font-mono font-bold text-2xl text-terc">₡0</p>
+          <p id="costoM3USD" class="font-mono text-xs text-steel mt-0.5">$0.00</p>
+        </div>
+      </div>
+
+      <p class="text-[11px] uppercase badge text-steel font-semibold mb-3">Utilización del Camión</p>
+      <div class="space-y-4">
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="text-sm font-semibold">Utilización por Peso</span>
+            <span id="utilPesoLbl" class="font-mono text-sm font-bold">0%</span>
+          </div>
+          <div class="h-3 rounded-full bg-slate-100 overflow-hidden">
+            <div id="utilPesoBar" class="util-bar h-full rounded-full bg-prop" style="width:0%"></div>
+          </div>
+          <p id="utilPesoNote" class="text-[11px] text-steel mt-1"></p>
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="text-sm font-semibold">Utilización por Volumen</span>
+            <span id="utilVolLbl" class="font-mono text-sm font-bold">0%</span>
+          </div>
+          <div class="h-3 rounded-full bg-slate-100 overflow-hidden">
+            <div id="utilVolBar" class="util-bar h-full rounded-full bg-terc" style="width:0%"></div>
+          </div>
+          <p id="utilVolNote" class="text-[11px] text-steel mt-1"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calculadora SKU -->
+    <div class="card rounded-2xl p-6 mb-5 pop" style="animation-delay:.09s">
+      <div class="flex items-center justify-between mb-5">
+        <div>
+          <h3 class="font-bold text-lg">Calculadora de SKU</h3>
+          <p class="text-[11px] text-steel mt-0.5">Costo proporcional por unidad · asume camión a capacidad efectiva</p>
+        </div>
+        <span id="skuLimitanteBadge" class="text-[11px] font-bold uppercase badge px-3 py-1 rounded-full bg-slate-100 text-steel">—</span>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div class="sm:col-span-2">
+          <label class="block text-xs font-semibold text-steel mb-1.5">Nombre / referencia</label>
+          <input id="skuNombre" type="text" value="SKU-001"
+                 class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm nfield text-navy">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-steel mb-1.5">Peso / unidad</label>
+          <div class="relative">
+            <input id="skuPeso" type="number" min="0" step="0.1" value="6"
+                   class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono nfield text-navy">
+            <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-steel font-mono">kg</span>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-steel mb-1.5">Volumen / unidad</label>
+          <div class="relative">
+            <input id="skuVol" type="number" min="0" step="0.001" value="0.006"
+                   class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono nfield text-navy">
+            <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-steel font-mono">m³</span>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-steel mb-1.5">Cantidad en ruta</label>
+          <div class="relative">
+            <input id="skuQty" type="number" min="1" step="1" value="100"
+                   class="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono nfield text-navy">
+            <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-steel font-mono">uds</span>
+          </div>
+        </div>
+        <div class="sm:col-span-3 rounded-xl bg-slate-50 border border-slate-200 px-4 py-3 flex flex-wrap gap-4 items-center text-xs text-steel font-mono">
+          <span>Peso vol/ud: <strong id="skuPesoVolUnit" class="text-navy">—</strong></span>
+          <span class="text-slate-300">|</span>
+          <span>Peso fact/ud: <strong id="skuPesoFactUnit" class="text-navy">—</strong></span>
+          <span class="text-slate-300">|</span>
+          <span>Limitante: <strong id="skuLimitanteUnit" class="text-navy">—</strong></span>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
+        <div class="rounded-xl bg-prop/5 border-2 border-prop p-4">
+          <p class="text-[11px] text-prop uppercase badge font-bold mb-1">Costo / unidad</p>
+          <p id="skuCostoUnit" class="font-mono font-extrabold text-2xl text-prop">₡0</p>
+          <p id="skuCostoUnitUSD" class="font-mono text-xs text-steel mt-0.5">$0.00</p>
+        </div>
+        <div class="rounded-xl bg-terc/5 border border-terc/20 p-4">
+          <p class="text-[11px] text-terc uppercase badge font-bold mb-1">Costo total SKU</p>
+          <p id="skuCostoTotal" class="font-mono font-bold text-2xl text-terc">₡0</p>
+          <p id="skuCostoTotalUSD" class="font-mono text-xs text-steel mt-0.5">$0.00</p>
+        </div>
+        <div class="rounded-xl bg-slate-50 border border-slate-200 p-4 col-span-2 sm:col-span-1">
+          <p class="text-[11px] text-steel uppercase badge font-bold mb-2">Máximo por camión</p>
+          <div class="flex gap-4 text-xs font-mono">
+            <div><p class="text-steel">Por peso</p><p id="skuMaxPeso" class="font-bold text-navy text-base">—</p><p class="text-[10px] text-steel">uds</p></div>
+            <div class="w-px bg-slate-200"></div>
+            <div><p class="text-steel">Por volumen</p><p id="skuMaxVol" class="font-bold text-navy text-base">—</p><p class="text-[10px] text-steel">uds</p></div>
+            <div class="w-px bg-slate-200"></div>
+            <div><p class="text-steel font-semibold">Efectivo</p><p id="skuMaxEf" class="font-extrabold text-prop text-base">—</p><p class="text-[10px] text-steel">uds</p></div>
+          </div>
+        </div>
+      </div>
+      <p class="text-[11px] uppercase badge text-steel font-semibold mb-3">Ocupación con <span id="skuQtyLabel">0</span> uds de <span id="skuNombreLabel">SKU</span></p>
+      <div class="space-y-3">
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="text-sm font-semibold">Por Peso</span>
+            <span class="font-mono text-sm"><span id="skuOcupPesoKg" class="font-bold">0 kg</span><span class="text-steel text-xs"> de <span id="skuCapEfPeso">0</span> kg · </span><span id="skuOcupPesoPct" class="font-bold">0%</span></span>
+          </div>
+          <div class="h-3 rounded-full bg-slate-100 overflow-hidden"><div id="skuOcupPesoBar" class="util-bar h-full rounded-full bg-prop" style="width:0%"></div></div>
+        </div>
+        <div>
+          <div class="flex items-baseline justify-between mb-1">
+            <span class="text-sm font-semibold">Por Volumen</span>
+            <span class="font-mono text-sm"><span id="skuOcupVolM3" class="font-bold">0 m³</span><span class="text-steel text-xs"> de <span id="skuCapEfVol">0</span> m³ · </span><span id="skuOcupVolPct" class="font-bold">0%</span></span>
+          </div>
+          <div class="h-3 rounded-full bg-slate-100 overflow-hidden"><div id="skuOcupVolBar" class="util-bar h-full rounded-full bg-terc" style="width:0%"></div></div>
+        </div>
+        <p id="skuOcupNota" class="text-[11px] text-steel mt-1 italic"></p>
+      </div>
+    </div>
+
+    <!-- Barras composición -->
+    <div class="card rounded-2xl p-6 mb-5 pop" style="animation-delay:.12s">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="font-bold text-lg">Composición del costo</h3>
+        <span class="text-xs text-steel font-mono">composición de la ruta</span>
+      </div>
+      <div id="bars" class="space-y-4"></div>
+    </div>
+
+    <!-- Gráfico -->
+    <div class="card rounded-2xl p-6 mb-5 pop" style="animation-delay:.14s">
+      <h3 class="font-bold text-lg mb-4">Desglose total (₡)</h3>
+      <div class="h-60"><canvas id="chart"></canvas></div>
+    </div>
+
+    <!-- Tabla desglose -->
+    <div class="card rounded-2xl p-6 mb-5 pop" style="animation-delay:.16s">
+      <h3 class="font-bold text-lg mb-4">Desglose de costos de la ruta</h3>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[11px] uppercase badge text-steel border-b border-slate-200">
+              <th class="py-2.5 pr-3 font-semibold">Componente</th>
+              <th class="py-2.5 pl-3 font-semibold text-right">Costo (₡ / $)</th>
+            </tr>
+          </thead>
+          <tbody id="cmpBody" class="font-mono tabular"></tbody>
+          <tfoot id="cmpFoot" class="font-extrabold"></tfoot>
+        </table>
+      </div>
+      <details class="mt-5 group">
+        <summary class="cursor-pointer select-none text-sm font-semibold text-prop flex items-center gap-2">
+          <span class="transition-transform group-open:rotate-90">▸</span>
+          Ver detalle de componentes variables (mantenimiento)
+        </summary>
+        <div class="overflow-x-auto mt-3 max-h-96 overflow-y-auto rounded-xl border border-slate-200">
+          <table class="w-full text-xs">
+            <thead class="sticky top-0 bg-white/95 backdrop-blur">
+              <tr class="text-left text-[10px] uppercase badge text-steel border-b border-slate-200">
+                <th class="py-2 px-3 font-semibold">Componente</th>
+                <th class="py-2 px-3 font-semibold">Frecuencia</th>
+                <th class="py-2 px-3 font-semibold text-right">Costo línea (₡)</th>
+                <th class="py-2 px-3 font-semibold text-right">Costo / KM</th>
+                <th class="py-2 px-3 font-semibold text-right">Aporte ruta</th>
+              </tr>
+            </thead>
+            <tbody id="varBody" class="font-mono tabular"></tbody>
+          </table>
+        </div>
+      </details>
+    </div>
+
+    <p class="text-[11px] text-steel text-center pb-4"><span class="font-bold text-[#00B49E]">OLO</span> · Modelo de costeo logístico · Última milla urbana · Proyección Costa Rica 2026.</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       TAB 2: COSTOS FIJOS
+       ══════════════════════════════════════════ -->
+  <div id="tab-fijos" class="tab-panel">
+
+    <!-- Días operativos -->
+    <div class="card rounded-2xl p-6 mb-5">
+      <div class="flex items-center justify-between flex-wrap gap-4">
+        <div>
+          <h3 class="font-bold text-lg">Base de Días Operativos</h3>
+          <p class="text-[11px] text-steel mt-0.5">Los costos fijos mensuales se dividen entre este número para obtener el costo diario</p>
+        </div>
+        <div class="flex items-center gap-3">
+          <div class="relative">
+            <input id="diasOperativos" type="number" min="1" max="31" step="1" value="30"
+                   class="nfield rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-mono text-navy w-24 text-center">
+            <span class="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-steel font-mono">días/mes</span>
+          </div>
+          <div class="rounded-xl bg-prop/5 border border-prop/20 px-4 py-2 text-center">
+            <p class="text-[10px] text-prop uppercase badge font-bold">Costo fijo diario</p>
+            <p id="fijoDiarioDisplay" class="font-mono font-bold text-prop">₡0</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Costos del Conductor -->
+    <div class="card rounded-2xl p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-bold text-lg">Costos del Conductor</h3>
+          <p class="text-[11px] text-steel mt-0.5">Mensuales · se dividen entre días operativos</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] text-steel uppercase badge">Total mensual</p>
+          <p id="totalConductorLbl" class="font-mono font-bold text-navy">₡0</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[10px] uppercase badge text-steel border-b border-slate-200">
+              <th class="py-2 pr-3 font-semibold">Concepto</th>
+              <th class="py-2 px-3 font-semibold text-right w-44">Monto mensual (₡)</th>
+              <th class="py-2 pl-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyConductor"></tbody>
+        </table>
+      </div>
+      <button onclick="addFijoConductor()" class="add-btn mt-3">+ Agregar concepto</button>
+    </div>
+
+    <!-- Costos del Ayudante -->
+    <div class="card rounded-2xl p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-bold text-lg">Costos del Ayudante</h3>
+          <p class="text-[11px] text-steel mt-0.5">Mensuales · aplica según tipo de camión / checkbox</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] text-steel uppercase badge">Total mensual</p>
+          <p id="totalAyudanteLbl" class="font-mono font-bold text-navy">₡0</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[10px] uppercase badge text-steel border-b border-slate-200">
+              <th class="py-2 pr-3 font-semibold">Concepto</th>
+              <th class="py-2 px-3 font-semibold text-right w-44">Monto mensual (₡)</th>
+              <th class="py-2 pl-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyAyudante"></tbody>
+        </table>
+      </div>
+      <button onclick="addFijoAyudante()" class="add-btn mt-3">+ Agregar concepto</button>
+    </div>
+
+    <!-- Depreciación -->
+    <div class="card rounded-2xl p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-bold text-lg">Depreciación por Tipo de Camión</h3>
+          <p class="text-[11px] text-steel mt-0.5">Valor del vehículo ÷ vida útil en meses = cuota mensual · se suma a costos fijos</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[10px] uppercase badge text-steel border-b border-slate-200">
+              <th class="py-2 pr-3 font-semibold">Tipo</th>
+              <th class="py-2 px-3 font-semibold text-right">Valor vehículo (₡)</th>
+              <th class="py-2 px-3 font-semibold text-right w-32">Vida útil (meses)</th>
+              <th class="py-2 pl-3 font-semibold text-right w-44">Cuota / mes (₡)</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyDeprec"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Otros costos fijos -->
+    <div class="card rounded-2xl p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-bold text-lg">Otros Costos Fijos</h3>
+          <p class="text-[11px] text-steel mt-0.5">Costos adicionales mensuales aplicables a todos los tipos de camión</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] text-steel uppercase badge">Total mensual</p>
+          <p id="totalOtrosLbl" class="font-mono font-bold text-navy">₡0</p>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-left text-[10px] uppercase badge text-steel border-b border-slate-200">
+              <th class="py-2 pr-3 font-semibold">Concepto</th>
+              <th class="py-2 px-3 font-semibold text-right w-44">Monto mensual (₡)</th>
+              <th class="py-2 pl-2 w-8"></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyOtros"></tbody>
+        </table>
+      </div>
+      <button onclick="addOtroFijo()" class="add-btn mt-3">+ Agregar concepto</button>
+    </div>
+
+    <p class="text-[11px] text-steel text-center pb-4">Cualquier cambio se refleja en tiempo real en el Dashboard.</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       TAB 3: COSTOS VARIABLES
+       ══════════════════════════════════════════ -->
+  <div id="tab-variables" class="tab-panel">
+
+    <div class="card rounded-2xl p-5 mb-5 bg-slate-50 border border-slate-200">
+      <div class="flex items-start gap-3">
+        <span class="text-xl">⛽</span>
+        <div>
+          <p class="font-semibold text-sm">El combustible se mantiene separado</p>
+          <p class="text-[11px] text-steel mt-0.5">Se calcula en el sidebar: KM de la ruta ÷ rendimiento del camión × precio del diesel. No forma parte de esta tabla.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabla de componentes variables -->
+    <div class="card rounded-2xl p-6 mb-5">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h3 class="font-bold text-lg">Componentes de Mantenimiento</h3>
+          <p class="text-[11px] text-steel mt-0.5">Costo por KM · edita directamente en la tabla · todos los tipos de camión</p>
+        </div>
+        <div class="text-right">
+          <p class="text-[10px] text-steel uppercase badge">Costo/KM total <span id="ckmTruckLbl" class="text-prop">(t3)</span></p>
+          <p id="totalCkmLbl" class="font-mono font-bold text-navy">₡0.00</p>
+        </div>
+      </div>
+      <!-- Leyenda de tipos — el activo se resalta -->
+      <div id="legendaVariables" class="flex gap-2 mb-3 flex-wrap"></div>
+      <div class="overflow-x-auto max-h-[600px] overflow-y-auto rounded-xl border border-slate-200">
+        <table class="w-full text-xs">
+          <thead class="sticky top-0 bg-white z-10 shadow-sm" id="theadVariables"></thead>
+          <tbody id="tbodyVariables"></tbody>
+        </table>
+      </div>
+      <button onclick="addVariable()" class="add-btn mt-3">+ Agregar componente</button>
+    </div>
+
+    <p class="text-[11px] text-steel text-center pb-4">Cualquier cambio se refleja en tiempo real en el Dashboard.</p>
+  </div>
+
+</main>
+
+<script>
+/* =====================================================================
+   SUPABASE CLIENT
+   ===================================================================== */
+const SUPABASE_URL = 'https://knmlayukwnowzyfojoxp.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtubWxheXVrd25vd3p5Zm9qb3hwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY1NzAwNDIsImV4cCI6MjEwMjE0NjA0Mn0.DyzjjbIrTGNVY9GVkqcf-9_QPFHh_1wCDCVsxuhTFe0';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+/* =====================================================================
+   CONSTANTES (se sobreescriben desde Supabase)
+   ===================================================================== */
+let TC = 452;
+let KM_ANUAL        = 36000;
+let HORAS_DIA       = 8;
+let HORAS_EXTRA_UMBRAL = 12;
+let HORAS_MAX       = 16;
+let KM_POR_LITRO    = { t1: 8.5, t3: 6.0, t5: 4.2 };
+let CAPACIDAD       = {
+  t1: { pesoKg: 2500, volM3: 14 },
+  t3: { pesoKg: 4500, volM3: 28 },
+  t5: { pesoKg: 7000, volM3: 42 },
+};
+
+/* =====================================================================
+   DATOS REACTIVOS — COSTOS FIJOS (se cargan desde Supabase)
+   ===================================================================== */
+let costosConductor = [];
+let costosAyudante = [];
+let depreciacion = {
+  t1: { label: "1–2.5 Ton", valorVehiculo: 10000000, vidaMeses: 60  },
+  t3: { label: "3–4.5 Ton", valorVehiculo: 20000000, vidaMeses: 72  },
+  t5: { label: "5–7 Ton",   valorVehiculo: 35000000, vidaMeses: 72  },
+};
+let otrosFijos = [];
+
+/* =====================================================================
+   DATOS REACTIVOS — COSTOS VARIABLES (se cargan desde Supabase)
+   ===================================================================== */
+let variables = [];
+
+/* =====================================================================
+   CARGA DE DATOS DESDE SUPABASE
+   ===================================================================== */
+let dataLoaded = false;
+
+async function cargarDatosSupabase() {
+  try {
+    // Cargar en paralelo todas las tablas
+    const [resTipos, resParams, resFijos, resDeprec, resVars] = await Promise.all([
+      sb.from('tipos_camion').select('*').order('orden'),
+      sb.from('parametros_globales').select('*'),
+      sb.from('costos_fijos').select('*').eq('activo', true).order('orden'),
+      sb.from('depreciacion').select('*'),
+      sb.from('costos_variables').select('*').eq('activo', true).order('orden'),
+    ]);
+
+    // Procesar tipos de camión → KM_POR_LITRO y CAPACIDAD
+    if (resTipos.data && resTipos.data.length > 0) {
+      KM_POR_LITRO = {};
+      CAPACIDAD = {};
+      resTipos.data.forEach(t => {
+        KM_POR_LITRO[t.codigo] = parseFloat(t.km_por_litro);
+        CAPACIDAD[t.codigo] = {
+          pesoKg: parseFloat(t.capacidad_kg),
+          volM3: parseFloat(t.capacidad_m3)
+        };
+      });
+    }
+
+    // Procesar parámetros globales
+    if (resParams.data && resParams.data.length > 0) {
+      const params = {};
+      resParams.data.forEach(p => { params[p.clave] = parseFloat(p.valor); });
+      if (params.tipo_cambio_usd) TC = params.tipo_cambio_usd;
+      if (params.km_anual) KM_ANUAL = params.km_anual;
+      if (params.horas_dia) HORAS_DIA = params.horas_dia;
+      if (params.horas_extra_umbral) HORAS_EXTRA_UMBRAL = params.horas_extra_umbral;
+      if (params.horas_max) HORAS_MAX = params.horas_max;
+      if (params.dias_operativos) document.getElementById('diasOperativos').value = params.dias_operativos;
+      if (params.factor_ocupacion) {
+        document.getElementById('factOcup').value = params.factor_ocupacion;
+        document.getElementById('factOcupLbl').textContent = params.factor_ocupacion;
+      }
+      if (params.factor_volumetrico) {
+        document.getElementById('factVol').value = params.factor_volumetrico;
+        document.getElementById('factVolLbl').textContent = params.factor_volumetrico;
+      }
+      if (params.precio_diesel) document.getElementById('diesel').value = params.precio_diesel;
+    }
+
+    // Procesar costos fijos
+    if (resFijos.data && resFijos.data.length > 0) {
+      costosConductor = [];
+      costosAyudante = [];
+      otrosFijos = [];
+      resFijos.data.forEach(cf => {
+        const item = { nombre: cf.concepto, valor: parseFloat(cf.monto) };
+        if (cf.categoria === 'conductor') costosConductor.push(item);
+        else if (cf.categoria === 'ayudante') costosAyudante.push(item);
+        else if (cf.categoria === 'otros') otrosFijos.push(item);
+      });
+    }
+
+    // Procesar depreciación
+    if (resDeprec.data && resDeprec.data.length > 0) {
+      resDeprec.data.forEach(d => {
+        if (depreciacion[d.codigo_camion]) {
+          depreciacion[d.codigo_camion].valorVehiculo = parseFloat(d.valor_vehiculo);
+          depreciacion[d.codigo_camion].vidaMeses = parseInt(d.vida_meses);
+        }
+      });
+    }
+
+    // Procesar costos variables
+    if (resVars.data && resVars.data.length > 0) {
+      variables = resVars.data.map(cv => ({
+        name: cv.componente,
+        type: cv.frecuencia,
+        freqT1: parseFloat(cv.freq_t1),
+        costT1: parseFloat(cv.costo_t1),
+        freqT3: parseFloat(cv.freq_t3),
+        costT3: parseFloat(cv.costo_t3),
+        freqT5: parseFloat(cv.freq_t5),
+        costT5: parseFloat(cv.costo_t5),
+        qty: cv.cantidad || '1 UND'
+      }));
+    }
+
+    dataLoaded = true;
+    console.log('✅ Datos cargados desde Supabase:', {
+      tipos: resTipos.data?.length,
+      parametros: resParams.data?.length,
+      costosFijos: resFijos.data?.length,
+      depreciacion: resDeprec.data?.length,
+      variables: resVars.data?.length
+    });
+
+    // Actualizar TC display
+    const label = '1 USD = ₡' + TC.toLocaleString('es-CR');
+    const el = document.getElementById('tcDisplay');
+    const elP = document.getElementById('tcDisplayPrint');
+    if (el) el.textContent = label;
+    if (elP) elP.textContent = label;
+
+    return true;
+  } catch (err) {
+    console.error('Error cargando datos de Supabase:', err);
+    return false;
+  }
+}
+
+// Helper para crear variables (fallback)
+function mkVar(name, type, f3, c3, f5, c5, qty, f1, c1){
+  return { name, type,
+    freqT1: f1 ?? f3,  costT1: c1 ?? Math.round(c3*0.80),
+    freqT3: f3,        costT3: c3,
+    freqT5: f5,        costT5: c5,
+    qty };
+}
+
+/* =====================================================================
+   FORMATO
+   ===================================================================== */
+const fmtCRC = (n,d=2)=> "₡"+n.toLocaleString('es-CR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtUSD = (n)=> "$"+(n/TC).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtNum = (n,d=0)=> n.toLocaleString('es-CR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const dual   = (n)=> `${fmtCRC(n)}<span class="text-steel font-normal"> · ${fmtUSD(n)}</span>`;
+const $ = id => document.getElementById(id);
+const set = (id,t)=> { const el=$(id); if(el) el.textContent=t; };
+
+/* =====================================================================
+   HELPERS DE CÁLCULO
+   ===================================================================== */
+function getDiasOperativos(){ return Math.max(1, parseInt($('diasOperativos').value)||30); }
+
+function totalConductor(){ return costosConductor.reduce((s,c)=>s+c.valor,0); }
+function totalAyudante(){  return costosAyudante.reduce((s,c)=>s+c.valor,0); }
+function totalOtros(){     return otrosFijos.reduce((s,c)=>s+c.valor,0); }
+function depMensual(type){ const d=depreciacion[type]; return d.vidaMeses>0?d.valorVehiculo/d.vidaMeses:0; }
+
+function getSalarioChofer(){
+  const item = costosConductor.find(c=>c.nombre==="Salario Chofer");
+  return item ? item.valor : 0;
+}
+function getSalarioAyudante(){
+  const item = costosAyudante.find(c=>c.nombre==="Salario Ayudante");
+  return item ? item.valor : 0;
+}
+
+function fijoDiario(conAyudante, type){
+  const dias = getDiasOperativos();
+  const base  = totalConductor() + depMensual(type) + totalOtros();
+  const ayud  = conAyudante ? totalAyudante() : 0;
+  return (base + ayud) / dias;
+}
+
+function costoPorKMvar(v, type){
+  let cost, freq;
+  if(type==='t1'){       cost=v.costT1; freq=v.freqT1; }
+  else if(type==='t3'){ cost=v.costT3; freq=v.freqT3; }
+  else {                 cost=v.costT5; freq=v.freqT5; }
+  if(v.type==="km")   return { ckm:cost/freq,            freqLabel:fmtNum(freq)+" KM",              linea:cost };
+  if(v.type==="year") return { ckm:cost/(freq*KM_ANUAL), freqLabel:freq+(freq===1?" año":" años")+" · 36k KM/año", linea:cost };
+  return                     { ckm:cost/3000,            freqLabel:"1 mes · 3k KM/mes",             linea:cost };
+}
+
+/* =====================================================================
+   CÁLCULO PRINCIPAL
+   ===================================================================== */
+function calcular(){
+  const type        = $('truckType').value;
+  const km          = Math.max(0, parseFloat($('km').value)||0);
+  const diesel      = Math.max(0, parseFloat($('diesel').value)||0);
+  const dias        = Math.max(1, parseInt($('dias').value)||1);
+  const horas       = Math.min(HORAS_MAX, Math.max(1,parseFloat($('horas').value)||8));
+  const cargaPeso   = Math.max(0, parseFloat($('cargaPeso').value)||0);
+  const cargaVol    = Math.max(0, parseFloat($('cargaVol').value)||0);
+  const factVol     = Math.max(1, parseFloat($('factVol').value)||333);
+  const factOcup    = Math.max(0,Math.min(1,(parseFloat($('factOcup').value)||85)/100));
+  const conAyudante = (type==='t1') ? $('helper').checked : true;
+
+  const fijoPropDia = fijoDiario(conAyudante, type);
+  const fijoProp    = fijoPropDia * dias;
+
+  const litros      = km / KM_POR_LITRO[type];
+  const combustible = litros * diesel;
+
+  let ckmTotal=0; const detalle=[];
+  variables.forEach(v=>{
+    const r = costoPorKMvar(v,type);
+    ckmTotal += r.ckm;
+    detalle.push({name:v.name,qty:v.qty,ckm:r.ckm,freqLabel:r.freqLabel,linea:r.linea,aporte:r.ckm*km});
+  });
+  const mantenimiento = ckmTotal * km;
+
+  const horasExtra = Math.max(0, horas - HORAS_EXTRA_UMBRAL);
+  const diasOp     = getDiasOperativos();
+  const tarifaExtraChofer   = (getSalarioChofer()   / diasOp / HORAS_DIA) * 1.5;
+  const tarifaExtraAyudante = (getSalarioAyudante() / diasOp / HORAS_DIA) * 1.5;
+  const costoHorasExtra = horasExtra > 0
+    ? horasExtra * (tarifaExtraChofer + (conAyudante?tarifaExtraAyudante:0))
+    : 0;
+
+  const propTotal = fijoProp + combustible + mantenimiento + costoHorasExtra;
+
+  const cap       = CAPACIDAD[type];
+  const capEfPeso = cap.pesoKg * factOcup;
+  const capEfVol  = cap.volM3  * factOcup;
+  const pesoVol   = cargaVol  * factVol;
+  const pesoFact  = Math.max(cargaPeso, pesoVol);
+  const costoKg   = pesoFact>0 ? propTotal/pesoFact : 0;
+  const costoM3   = cargaVol>0  ? propTotal/cargaVol  : 0;
+  const utilPeso  = capEfPeso>0 ? (pesoFact/capEfPeso)*100 : 0;
+  const utilVol   = capEfVol>0  ? (cargaVol/capEfVol)*100  : 0;
+  const limitante = (pesoVol>=cargaPeso) ? 'Volumen' : 'Peso';
+
+  return { type, km, diesel, dias, horas, horasExtra, conAyudante,
+    fijoPropDia, fijoProp, combustible, mantenimiento, costoHorasExtra,
+    propTotal, propPerKM:km>0?propTotal/km:0, detalle, ckmTotal,
+    cap, capEfPeso, capEfVol,
+    cargaPeso, cargaVol, pesoVol, pesoFact,
+    costoKg, costoM3, utilPeso, utilVol, limitante };
+}
+
+/* =====================================================================
+   RENDER — DASHBOARD
+   ===================================================================== */
+let chart;
+function render(){
+  const d = calcular();
+  $('routeTitle').textContent = $('routeName').value||'Ruta';
+
+  set('propCRC', fmtCRC(d.propTotal));
+  set('propUSD', fmtUSD(d.propTotal));
+  set('propPerKM', fmtCRC(d.propPerKM)+" · "+fmtUSD(d.propPerKM));
+  set('capPesoLbl', fmtNum(d.cap.pesoKg)+' kg');
+  set('capVolLbl',  fmtNum(d.cap.volM3)+' m³');
+
+  set('capEfPeso', fmtNum(d.capEfPeso)+' kg');
+  set('capEfVol',  fmtNum(d.capEfVol,1)+' m³');
+  set('resumenPesoReal', fmtNum(d.cargaPeso)+' kg');
+  set('resumenPesoVol',  fmtNum(d.pesoVol)+' kg');
+  set('resumenPesoFact', fmtNum(d.pesoFact)+' kg');
+  $('costoKg').textContent    = fmtCRC(d.costoKg);
+  $('costoKgUSD').textContent = fmtUSD(d.costoKg);
+  $('costoM3').textContent    = fmtCRC(d.costoM3);
+  $('costoM3USD').textContent = fmtUSD(d.costoM3);
+
+  const upPct=Math.min(d.utilPeso,100), uvPct=Math.min(d.utilVol,100);
+  const upC=d.utilPeso>100?'bg-red-500':d.utilPeso>85?'bg-amber-400':'bg-prop';
+  const uvC=d.utilVol>100?'bg-red-500':d.utilVol>85?'bg-amber-400':'bg-terc';
+  $('utilPesoBar').style.width=upPct+'%'; $('utilPesoBar').className=`util-bar h-full rounded-full ${upC}`;
+  $('utilVolBar').style.width=uvPct+'%';  $('utilVolBar').className=`util-bar h-full rounded-full ${uvC}`;
+  set('utilPesoLbl', fmtNum(d.utilPeso,1)+'%');
+  set('utilVolLbl',  fmtNum(d.utilVol,1)+'%');
+  set('utilPesoNote', `${fmtNum(d.pesoFact)} kg facturables de ${fmtNum(d.capEfPeso)} kg efectivos`);
+  set('utilVolNote',  `${fmtNum(d.cargaVol,1)} m³ cargados de ${fmtNum(d.capEfVol,1)} m³ efectivos`);
+
+  const badge=$('limitanteBadge');
+  badge.textContent='Limitante: '+d.limitante;
+  badge.className=d.limitante==='Volumen'
+    ?'text-[11px] font-bold uppercase badge px-3 py-1 rounded-full bg-teal-50 text-terc border border-teal-200'
+    :'text-[11px] font-bold uppercase badge px-3 py-1 rounded-full bg-[#e0f7f4] text-prop border border-[#99DDD5]';
+
+  const showExtras=d.costoHorasExtra>0;
+  $('bars').innerHTML=`
+    ${barRow('Costo Fijo ('+d.dias+'d)',     d.fijoProp,      d.propTotal,'bg-navy')}
+    ${barRow('Combustible de la Ruta',       d.combustible,   d.propTotal,'bg-prop')}
+    ${barRow('Mantenimiento de la Ruta',     d.mantenimiento, d.propTotal,'bg-terc')}
+    ${showExtras?barRow('Horas Extras ('+d.horasExtra+'h × 1.5×)',d.costoHorasExtra,d.propTotal,'bg-amber-400'):''}`;
+
+  const rows=[
+    ["Costo Fijo × "+d.dias+"d", d.fijoProp,        ''],
+    ["  · Base diaria (1 día)",   d.fijoPropDia,     'sub'],
+    ["Combustible de la Ruta",    d.combustible,     ''],
+    ["Mantenimiento de la Ruta",  d.mantenimiento,   ''],
+  ];
+  if(d.horasExtra>0) rows.push(["Horas extras ("+d.horasExtra+"h × 1.5×)",d.costoHorasExtra,'extra']);
+  $('cmpBody').innerHTML=rows.map(([label,p,cls])=>{
+    const isSub=cls==='sub', isExtra=cls==='extra';
+    const tc=isSub?'text-steel font-normal text-xs pl-4':isExtra?'text-amber-600 font-semibold':'font-semibold';
+    return `<tr class="border-b border-slate-100">
+      <td class="py-2.5 pr-3 font-sans ${tc}">${label}</td>
+      <td class="py-2.5 pl-3 text-right ${isSub?'text-steel text-xs':''}">${p>0?dual(p):'<span class="text-slate-300">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  $('cmpFoot').innerHTML=`
+    <tr class="border-t-2 border-slate-300">
+      <td class="py-3 pr-3">TOTAL RUTA</td>
+      <td class="py-3 pl-3 text-right text-prop">${dual(d.propTotal)}</td>
+    </tr>
+    <tr class="text-steel text-xs">
+      <td class="py-2 pr-3 font-sans font-semibold">Costo neto por kilómetro</td>
+      <td class="py-2 pl-3 text-right font-mono">${dual(d.propPerKM)}</td>
+    </tr>`;
+  $('varBody').innerHTML=d.detalle.map(c=>`
+    <tr class="border-b border-slate-100">
+      <td class="py-1.5 px-3 font-sans">${c.name} <span class="text-slate-400">· ${c.qty}</span></td>
+      <td class="py-1.5 px-3 text-steel">${c.freqLabel}</td>
+      <td class="py-1.5 px-3 text-right text-steel">${fmtCRC(c.linea,0)}</td>
+      <td class="py-1.5 px-3 text-right text-steel">${fmtCRC(c.ckm,2)}</td>
+      <td class="py-1.5 px-3 text-right font-semibold">${fmtCRC(c.aporte)}</td>
+    </tr>`).join('');
+
+  renderChart(d);
+  renderSKU(d);
+  renderTabFijos(d);
+  renderTabVariables(d);
+}
+
+function barRow(label,val,total,color){
+  const pct=total>0?((val/total)*100).toFixed(1):0;
+  const w=Math.max(2,(val/Math.max(total,1))*100);
+  return `<div>
+    <div class="flex items-baseline justify-between mb-1">
+      <span class="text-sm font-semibold">${label}</span>
+      <span class="font-mono text-sm">${fmtCRC(val)} <span class="text-steel text-xs">· ${fmtUSD(val)} · ${pct}%</span></span>
+    </div>
+    <div class="h-3 rounded-full bg-slate-100 overflow-hidden">
+      <div class="bar h-full rounded-full ${color}" style="width:${w}%"></div>
+    </div>
+  </div>`;
+}
+
+function renderChart(d){
+  const hasE=d.costoHorasExtra>0;
+  const labels=['Fijo Diario','Combustible','Mantenimiento',...(hasE?['Horas Extras']:[])];
+  const vals=[d.fijoProp,d.combustible,d.mantenimiento,...(hasE?[d.costoHorasExtra]:[])];
+  const colors=['#1A1A1A','#00B49E','#007B6E',...(hasE?['#33C3B0']:[])];
+  const datasets=[{label:'Transporte',data:vals,backgroundColor:colors}];
+  const opts={
+    responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>c.label+": ₡"+c.parsed.y.toLocaleString('es-CR',{maximumFractionDigits:0})+" · "+fmtUSD(c.parsed.y)}}},
+    scales:{
+      x:{grid:{display:false},ticks:{font:{family:"'Manrope'",weight:'600'}}},
+      y:{beginAtZero:true,ticks:{callback:v=>"₡"+Number(v).toLocaleString('es-CR'),font:{family:"'IBM Plex Mono'",size:10}},grid:{color:'#e2e8f0'}}
+    }
+  };
+  if(chart){chart.data.labels=labels;chart.data.datasets=datasets;chart.update();}
+  else{chart=new Chart($('chart'),{type:'bar',data:{labels,datasets},options:opts});}
+}
+
+/* =====================================================================
+   RENDER — SKU
+   ===================================================================== */
+function renderSKU(d){
+  const skuPeso  = Math.max(0, parseFloat($('skuPeso').value)||0);
+  const skuVol   = Math.max(0, parseFloat($('skuVol').value)||0);
+  const skuQty   = Math.max(1, parseInt($('skuQty').value)||1);
+  const nombre   = $('skuNombre').value||'SKU';
+  const factVol  = Math.max(1, parseFloat($('factVol').value)||333);
+  const skuPesoVol  = skuVol*factVol;
+  const skuPesoFact = Math.max(skuPeso,skuPesoVol);
+  const limitanteUd = skuPesoVol>=skuPeso?'Volumen':'Peso';
+  const capFactPeso = d.capEfPeso;
+  const capFactVol  = d.capEfVol*factVol;
+  const capFact     = Math.min(capFactPeso,capFactVol);
+  const limitanteCamion=capFactPeso<=capFactVol?'Peso':'Volumen';
+  const fraccion  = capFact>0?skuPesoFact/capFact:0;
+  const costoUnit = fraccion*d.propTotal;
+  const costoTot  = costoUnit*skuQty;
+  const maxPeso   = skuPesoFact>0?Math.floor(d.capEfPeso/skuPesoFact):Infinity;
+  const maxVol    = skuVol>0?Math.floor(d.capEfVol/skuVol):Infinity;
+  const maxEf     = Math.min(maxPeso,maxVol);
+  const ocupPesoKg=skuPesoFact*skuQty, ocupVolM3=skuVol*skuQty;
+  const ocupPesoPct=d.capEfPeso>0?(ocupPesoKg/d.capEfPeso)*100:0;
+  const ocupVolPct =d.capEfVol>0?(ocupVolM3/d.capEfVol)*100:0;
+
+  set('skuPesoVolUnit',  fmtNum(skuPesoVol,2)+' kg');
+  set('skuPesoFactUnit', fmtNum(skuPesoFact,2)+' kg');
+  set('skuLimitanteUnit',limitanteUd);
+  set('skuQtyLabel',  skuQty);
+  set('skuNombreLabel',nombre);
+  const badge=$('skuLimitanteBadge');
+  badge.textContent='Cap. limitante: '+limitanteCamion;
+  badge.className=limitanteCamion==='Volumen'
+    ?'text-[11px] font-bold uppercase badge px-3 py-1 rounded-full bg-teal-50 text-terc border border-teal-200'
+    :'text-[11px] font-bold uppercase badge px-3 py-1 rounded-full bg-[#e0f7f4] text-prop border border-[#99DDD5]';
+  $('skuCostoUnit').textContent     = fmtCRC(costoUnit);
+  $('skuCostoUnitUSD').textContent  = fmtUSD(costoUnit);
+  $('skuCostoTotal').textContent    = fmtCRC(costoTot);
+  $('skuCostoTotalUSD').textContent = fmtUSD(costoTot);
+  set('skuMaxPeso',maxPeso===Infinity?'∞':fmtNum(maxPeso));
+  set('skuMaxVol', maxVol===Infinity?'∞':fmtNum(maxVol));
+  set('skuMaxEf',  maxEf===Infinity?'∞':fmtNum(maxEf));
+  const upPct=Math.min(ocupPesoPct,100),uvPct=Math.min(ocupVolPct,100);
+  $('skuOcupPesoBar').style.width=upPct+'%';
+  $('skuOcupPesoBar').className=`util-bar h-full rounded-full ${ocupPesoPct>100?'bg-red-500':ocupPesoPct>85?'bg-amber-400':'bg-prop'}`;
+  $('skuOcupVolBar').style.width=uvPct+'%';
+  $('skuOcupVolBar').className=`util-bar h-full rounded-full ${ocupVolPct>100?'bg-red-500':ocupVolPct>85?'bg-amber-400':'bg-terc'}`;
+  set('skuOcupPesoKg', fmtNum(ocupPesoKg,1)+' kg');
+  set('skuOcupVolM3',  fmtNum(ocupVolM3,3)+' m³');
+  set('skuCapEfPeso',  fmtNum(d.capEfPeso));
+  set('skuCapEfVol',   fmtNum(d.capEfVol,1));
+  set('skuOcupPesoPct',fmtNum(ocupPesoPct,1)+'%');
+  set('skuOcupVolPct', fmtNum(ocupVolPct,1)+'%');
+  let nota='';
+  if(skuQty>maxEf) nota=`⚠ ${fmtNum(skuQty)} uds excede el máximo de ${fmtNum(maxEf)} uds. Se necesitarían ${Math.ceil(skuQty/maxEf)} viajes.`;
+  else if(ocupPesoPct<30&&ocupVolPct<30) nota='Esta carga ocupa menos del 30% del camión. Considere consolidar con otros SKUs.';
+  set('skuOcupNota',nota);
+}
+
+/* =====================================================================
+   RENDER — TAB COSTOS FIJOS
+   ===================================================================== */
+function renderTabFijos(d){
+  const diasOp = getDiasOperativos();
+  const totC = totalConductor(), totA = totalAyudante(), totO = totalOtros();
+  const type = $('truckType').value;
+  const conAyudante = (type==='t1')?$('helper').checked:true;
+  const depM = depMensual(type);
+  const totalFijoMes = totC + depM + totO + (conAyudante?totA:0);
+  set('fijoDiarioDisplay', fmtCRC(totalFijoMes/diasOp));
+  set('totalConductorLbl', fmtCRC(totC,0));
+  set('totalAyudanteLbl',  fmtCRC(totA,0));
+  set('totalOtrosLbl',     fmtCRC(totO,0));
+
+  /* Tabla conductor */
+  $('tbodyConductor').innerHTML = costosConductor.map((c,i)=>`
+    <tr class="border-b border-slate-100">
+      <td class="py-1.5 pr-3"><input class="edit-input text-input" value="${c.nombre}" onchange="costosConductor[${i}].nombre=this.value;render()"></td>
+      <td class="py-1.5 px-3 text-right"><input class="edit-input text-right" type="number" min="0" step="100" value="${c.valor}" onchange="costosConductor[${i}].valor=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 pl-2 text-center"><button class="del-btn" onclick="costosConductor.splice(${i},1);render()">×</button></td>
+    </tr>`).join('');
+
+  /* Tabla ayudante */
+  $('tbodyAyudante').innerHTML = costosAyudante.map((c,i)=>`
+    <tr class="border-b border-slate-100">
+      <td class="py-1.5 pr-3"><input class="edit-input text-input" value="${c.nombre}" onchange="costosAyudante[${i}].nombre=this.value;render()"></td>
+      <td class="py-1.5 px-3 text-right"><input class="edit-input text-right" type="number" min="0" step="100" value="${c.valor}" onchange="costosAyudante[${i}].valor=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 pl-2 text-center"><button class="del-btn" onclick="costosAyudante.splice(${i},1);render()">×</button></td>
+    </tr>`).join('');
+
+  /* Tabla depreciación */
+  $('tbodyDeprec').innerHTML = ['t1','t3','t5'].map(t=>{
+    const dep=depreciacion[t];
+    const cuota=dep.vidaMeses>0?dep.valorVehiculo/dep.vidaMeses:0;
+    const isActive=type===t;
+    return `<tr class="border-b border-slate-100 ${isActive?'bg-prop/5':''}">
+      <td class="py-1.5 pr-3 font-semibold text-xs ${isActive?'text-prop':''}">${dep.label} ${isActive?'← activo':''}</td>
+      <td class="py-1.5 px-3 text-right"><input class="edit-input text-right" type="number" min="0" step="100000" value="${dep.valorVehiculo}" onchange="depreciacion['${t}'].valorVehiculo=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 px-3 text-right"><input class="edit-input text-right" type="number" min="1" step="1" value="${dep.vidaMeses}" onchange="depreciacion['${t}'].vidaMeses=parseInt(this.value)||1;render()"></td>
+      <td class="py-1.5 pl-3 text-right font-semibold font-mono text-xs">${fmtCRC(cuota,0)}</td>
+    </tr>`;}).join('');
+
+  /* Tabla otros */
+  $('tbodyOtros').innerHTML = otrosFijos.length===0
+    ? `<tr><td colspan="3" class="py-4 text-center text-steel text-xs italic">Sin costos adicionales · usa el botón para agregar</td></tr>`
+    : otrosFijos.map((c,i)=>`
+    <tr class="border-b border-slate-100">
+      <td class="py-1.5 pr-3"><input class="edit-input text-input" value="${c.nombre}" onchange="otrosFijos[${i}].nombre=this.value;render()"></td>
+      <td class="py-1.5 px-3 text-right"><input class="edit-input text-right" type="number" min="0" step="100" value="${c.valor}" onchange="otrosFijos[${i}].valor=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 pl-2 text-center"><button class="del-btn" onclick="otrosFijos.splice(${i},1);render()">×</button></td>
+    </tr>`).join('');
+}
+
+/* =====================================================================
+   RENDER — TAB COSTOS VARIABLES
+   ===================================================================== */
+function renderTabVariables(d){
+  set('totalCkmLbl', fmtCRC(d.ckmTotal, 4));
+  const type = $('truckType').value;
+  set('ckmTruckLbl', type==='t1'?'(T1)':type==='t3'?'(T3)':'(T5)');
+
+  // Colores y estilos por tipo
+  const cfg = {
+    t1:{ bg:'#f8fafa', bgA:'#e0f7f4', border:'#99DDD5', label:'T1 · 1–2.5 Ton', txt:'#007B6E' },
+    t3:{ bg:'#f0faf9', bgA:'#ccf0eb', border:'#66CCBF', label:'T3 · 3–4.5 Ton', txt:'#00867A' },
+    t5:{ bg:'#e6f7f4', bgA:'#b3e8e0', border:'#00B49E', label:'T5 · 5–7 Ton',   txt:'#006B60' },
+  };
+
+  // Leyenda
+  $('legendaVariables').innerHTML = ['t1','t3','t5'].map(t=>{
+    const c=cfg[t], isActive=(t===type);
+    return `<span style="font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+      padding:4px 10px;border-radius:999px;border:2px solid ${isActive?c.border:'#e2e8f0'};
+      background:${isActive?c.bgA:'#f1f5f9'};color:${isActive?c.txt:'#64748b'}">
+      ${isActive?'▶ ':''}${c.label}${isActive?' (activo)':''}
+    </span>`;
+  }).join('');
+
+  // Header dinámico
+  const thStyle = (t)=> type===t
+    ? `style="background:${cfg[t].bgA};color:${cfg[t].txt};border-bottom:2px solid ${cfg[t].border}"`
+    : `style="background:${cfg[t].bg}"`;
+  $('theadVariables').innerHTML = `
+    <tr class="text-left text-[10px] uppercase badge text-steel border-b border-slate-200">
+      <th class="py-2.5 px-3 font-semibold min-w-[150px]">Componente</th>
+      <th class="py-2.5 px-2 font-semibold w-20">Tipo</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-20" ${thStyle('t1')}>Frec. T1</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-28" ${thStyle('t1')}>Costo T1 (₡)</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-20" ${thStyle('t3')}>Frec. T3</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-28" ${thStyle('t3')}>Costo T3 (₡)</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-20" ${thStyle('t5')}>Frec. T5</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-28" ${thStyle('t5')}>Costo T5 (₡)</th>
+      <th class="py-2.5 px-2 font-semibold text-right w-24" style="background:#fffbeb;color:#92400e">₡/KM activo</th>
+      <th class="py-2.5 px-2 font-semibold w-20">Cantidad</th>
+      <th class="py-2.5 px-2 w-8"></th>
+    </tr>`;
+
+  const TIPOS=['km','year','month'];
+  $('tbodyVariables').innerHTML = variables.map((v,i)=>{
+    const r = costoPorKMvar(v, type);
+    const td = (t)=> type===t
+      ? `style="background:${cfg[t].bgA};border-left:2px solid ${cfg[t].border}"`
+      : `style="background:${cfg[t].bg}"`;
+    return `<tr class="border-b border-slate-100">
+      <td class="py-1.5 px-3"><input class="edit-input text-input" value="${v.name}" onchange="variables[${i}].name=this.value;render()"></td>
+      <td class="py-1.5 px-2">
+        <select class="edit-input bg-transparent" onchange="variables[${i}].type=this.value;render()">
+          ${TIPOS.map(t=>`<option value="${t}" ${v.type===t?'selected':''}>${t}</option>`).join('')}
+        </select>
+      </td>
+      <td class="py-1.5 px-2 text-right" ${td('t1')}><input class="edit-input text-right" type="number" min="1" value="${v.freqT1}" onchange="variables[${i}].freqT1=parseFloat(this.value)||1;render()"></td>
+      <td class="py-1.5 px-2 text-right" ${td('t1')}><input class="edit-input text-right" type="number" min="0" step="10" value="${v.costT1}" onchange="variables[${i}].costT1=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 px-2 text-right" ${td('t3')}><input class="edit-input text-right" type="number" min="1" value="${v.freqT3}" onchange="variables[${i}].freqT3=parseFloat(this.value)||1;render()"></td>
+      <td class="py-1.5 px-2 text-right" ${td('t3')}><input class="edit-input text-right" type="number" min="0" step="10" value="${v.costT3}" onchange="variables[${i}].costT3=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 px-2 text-right" ${td('t5')}><input class="edit-input text-right" type="number" min="1" value="${v.freqT5}" onchange="variables[${i}].freqT5=parseFloat(this.value)||1;render()"></td>
+      <td class="py-1.5 px-2 text-right" ${td('t5')}><input class="edit-input text-right" type="number" min="0" step="10" value="${v.costT5}" onchange="variables[${i}].costT5=parseFloat(this.value)||0;render()"></td>
+      <td class="py-1.5 px-2 text-right font-mono font-semibold" style="background:#fffbeb;color:#92400e">${fmtCRC(r.ckm,4)}</td>
+      <td class="py-1.5 px-2"><input class="edit-input text-input" value="${v.qty}" onchange="variables[${i}].qty=this.value;render()"></td>
+      <td class="py-1.5 px-2 text-center"><button class="del-btn" onclick="variables.splice(${i},1);render()">×</button></td>
+    </tr>`;
+  }).join('');
+}
+
+/* =====================================================================
+   ADD ROWS
+   ===================================================================== */
+function addFijoConductor(){ costosConductor.push({nombre:'Nuevo concepto',valor:0}); render(); }
+function addFijoAyudante(){  costosAyudante.push({nombre:'Nuevo concepto',valor:0});  render(); }
+function addOtroFijo(){      otrosFijos.push({nombre:'Nuevo concepto',valor:0});       render(); }
+function addVariable(){      variables.push(mkVar('Nuevo componente','km',10000,0,10000,0,'1 UND',10000,0)); render(); }
+
+/* =====================================================================
+   TABS
+   ===================================================================== */
+function switchTab(name){
+  ['dashboard','fijos','variables'].forEach(t=>{
+    $('tab-'+t).classList.toggle('active', t===name);
+    $('tab-btn-'+t).classList.toggle('active', t===name);
+  });
+}
+
+/* =====================================================================
+   UI SYNC
+   ===================================================================== */
+function syncTruckUI(){
+  const type=$('truckType').value;
+  const cb=$('helper');
+  if(type==='t1'){ cb.disabled=false; $('helperNote').classList.add('hidden'); }
+  else{ cb.checked=true; cb.disabled=true; $('helperNote').classList.remove('hidden'); }
+}
+function syncHorasUI(){
+  const h=parseFloat($('horas').value)||8;
+  const extra=Math.max(0,h-HORAS_EXTRA_UMBRAL);
+  set('horasLbl',h);
+  const pct=((h-1)/(HORAS_MAX-1))*100;
+  $('horasFill').style.width=pct+'%';
+  $('horasFill').className=h>HORAS_EXTRA_UMBRAL
+    ?'absolute top-0 left-0 h-full rounded-full bg-orange-500 pointer-events-none'
+    :'absolute top-0 left-0 h-full rounded-full bg-prop pointer-events-none';
+  if(extra>0){ $('horasExtraChip').classList.remove('hidden'); set('horasExtraQty',extra); }
+  else $('horasExtraChip').classList.add('hidden');
+}
+
+/* =====================================================================
+   EVENTOS
+   ===================================================================== */
+['routeName','km','diesel','helper','cargaPeso','cargaVol','dias','diasOperativos'].forEach(id=>{
+  $(id).addEventListener('input', render);
+  $(id).addEventListener('change', render);
+});
+['skuNombre','skuPeso','skuVol','skuQty'].forEach(id=>{
+  $(id).addEventListener('input', render);
+  $(id).addEventListener('change', render);
+});
+$('truckType').addEventListener('change',()=>{ syncTruckUI(); render(); });
+$('horas').addEventListener('input',()=>{ syncHorasUI(); render(); });
+$('factVol').addEventListener('input',()=>{ set('factVolLbl',parseFloat($('factVol').value).toFixed(0)); render(); });
+$('factOcup').addEventListener('input',()=>{ set('factOcupLbl',parseFloat($('factOcup').value).toFixed(0)); render(); });
+
+// Init — cargar datos de Supabase primero, luego renderizar
+(async function init() {
+  const ok = await cargarDatosSupabase();
+  if (!ok) {
+    console.warn('⚠ No se pudieron cargar datos de Supabase, usando fallback local');
+    // Fallback: datos hardcoded mínimos si Supabase falla
+    if (costosConductor.length === 0) {
+      costosConductor = [
+        { nombre: "Salario Chofer", valor: 820600 },
+        { nombre: "Aguinaldo Chofer", valor: 83333.33 },
+        { nombre: "Seguro (terceros)", valor: 19000 },
+        { nombre: "Marchamo", valor: 18949.16 },
+        { nombre: "DEKRA", valor: 888 },
+        { nombre: "Zapatos y chaleco", valor: 4000 },
+      ];
+      costosAyudante = [
+        { nombre: "Salario Ayudante", valor: 462666.84 },
+        { nombre: "Aguinaldo Ayudante", valor: 38555.57 },
+      ];
+      variables = [
+        mkVar("Filtro de Agua","km",15000,11300,15000,15820,"1 UND",15000,9040),
+        mkVar("Filtro de Aire","km",15000,18080,15000,24860,"1 UND",15000,14464),
+      ];
+    }
+  }
+  syncTruckUI();
+  syncHorasUI();
+  render();
+  // Después de renderizar con datos de Supabase, actualizar TC desde API web
+  actualizarDatosWeb(false);
+})();
+
+// ─── DATOS WEB (TC + Diesel) ─────────────────────────────────────────────────
+function setWebStatus(estado, texto){
+  const dot  = document.getElementById('webStatusDot');
+  const txt  = document.getElementById('webStatusText');
+  const btn  = document.getElementById('refreshBtn');
+  if(!dot) return;
+  const colores = { ok:'#00B49E', error:'#ef4444', cargando:'#f59e0b' };
+  dot.style.background = colores[estado] || '#94a3b8';
+  txt.textContent = texto;
+  btn.style.opacity = estado==='cargando' ? '0.4' : '1';
+  btn.disabled = estado==='cargando';
+}
+
+function actualizarTC(tcValue){
+  TC = Math.round(tcValue);
+  const label = '1 USD = ₡' + TC.toLocaleString('es-CR');
+  const el  = document.getElementById('tcDisplay');
+  const elP = document.getElementById('tcDisplayPrint');
+  if(el)  el.textContent  = label;
+  if(elP) elP.textContent = label;
+  render();
+}
+
+async function actualizarDatosWeb(manual=false){
+  setWebStatus('cargando', 'Obteniendo tipo de cambio…');
+  let tcOk = false;
+  try {
+    // Open Exchange Rates — free, CORS-enabled, no API key needed
+    const res  = await Promise.race([
+      fetch('https://open.er-api.com/v6/latest/USD'),
+      new Promise((_,r)=>setTimeout(()=>r(new Error('timeout')),8000))
+    ]);
+    if(!res.ok) throw new Error('HTTP '+res.status);
+    const data = await res.json();
+    const crc  = data?.rates?.CRC;
+    if(!crc || typeof crc!=='number') throw new Error('Sin dato CRC');
+    actualizarTC(crc);
+    tcOk = true;
+  } catch(err){
+    console.warn('TC fetch error:', err.message);
+  }
+
+  const hora = new Date().toLocaleTimeString('es-CR',{hour:'2-digit',minute:'2-digit'});
+  const dbLabel = dataLoaded ? '· Supabase ✓' : '· Supabase ✗';
+  if(tcOk){
+    setWebStatus('ok', `TC actualizado ${dbLabel} · ${hora}`);
+    const ds = document.getElementById('dieselStatusText');
+    if(ds) ds.textContent = 'TC en línea · Diesel: actualizá desde RECOPE ↗';
+  } else {
+    setWebStatus(dataLoaded ? 'ok' : 'error', `TC manual ${dbLabel} · ${hora}`);
+    const ds = document.getElementById('dieselStatusText');
+    if(ds) ds.textContent = dataLoaded ? 'Datos de Supabase OK · TC manual' : 'Sin conexión. Usá el valor manual.';
+  }
+}
+
+// Auto-fetch on load is handled by init() above
+
+// ─── EXPORTAR PDF ────────────────────────────────────────────────────────────
+function exportarPDF(){
+  // Populate print-only header
+  const ruta = $('routeName').value || 'Ruta';
+  const truckSel = $('truckType');
+  const truckLabel = truckSel.options[truckSel.selectedIndex].text;
+  const km   = $('km').value;
+  const dias = $('dias').value;
+  $('printRutaTitle').textContent = ruta;
+  $('printTruckLabel').textContent = truckLabel + ' · ' + km + ' KM · ' + dias + ' día(s)';
+  $('printDate').textContent = 'Generado: ' + new Date().toLocaleDateString('es-CR',{day:'2-digit',month:'long',year:'numeric'});
+  window.print();
+}
+
+// ─── EXPORTAR CSV ────────────────────────────────────────────────────────────
+function exportarCSV(){
+  const ruta      = $('routeName').value || 'Ruta';
+  const truckSel  = $('truckType');
+  const truckLabel= truckSel.options[truckSel.selectedIndex].text;
+  const km        = $('km').value;
+  const dias      = $('dias').value;
+  const horas     = $('horas').value;
+  const fecha     = new Date().toLocaleDateString('es-CR');
+
+  // Helper: strip ₡ / $ / commas from DOM text
+  const raw = id => (document.getElementById(id)||{}).textContent?.replace(/[₡$,\s]/g,'').trim() || '';
+
+  const rows = [
+    ['OLO · Costeo Última Milla · Costa Rica 2026'],
+    ['Fecha',fecha],
+    [],
+    // ── RESUMEN DE RUTA
+    ['=== RESUMEN DE LA RUTA ==='],
+    ['Ruta', ruta],
+    ['Tipo de camión', truckLabel],
+    ['Kilómetros', km],
+    ['Días de ruta', dias],
+    ['Duración (horas)', horas],
+    ['Costo total (₡)', raw('propCRC')],
+    ['Costo total (USD)', raw('propUSD')],
+    ['Costo por KM (₡)', raw('propPerKM')],
+    [],
+    // ── DESGLOSE DE COSTOS (from breakdown table)
+    ['=== DESGLOSE DE COSTOS ==='],
+    ['Componente','Costo (₡)'],
+  ];
+
+  // Pull rows from breakdown table
+  const tbody = document.getElementById('cmpBody');
+  if(tbody){
+    [...tbody.querySelectorAll('tr')].forEach(tr=>{
+      const cells = [...tr.querySelectorAll('td')];
+      if(cells.length >= 2){
+        const label = cells[0].textContent.trim();
+        const val   = cells[1].textContent.replace(/[₡$\s]/g,'').split('/')[0].trim();
+        rows.push([label, val]);
+      }
+    });
+  }
+  const tfoot = document.getElementById('cmpFoot');
+  if(tfoot){
+    [...tfoot.querySelectorAll('tr')].forEach(tr=>{
+      const cells = [...tr.querySelectorAll('td,th')];
+      if(cells.length >= 2){
+        const label = cells[0].textContent.trim();
+        const val   = cells[1].textContent.replace(/[₡$\s]/g,'').split('/')[0].trim();
+        rows.push([label, val]);
+      }
+    });
+  }
+
+  rows.push([]);
+  // ── ANÁLISIS VOLUMÉTRICO
+  rows.push(['=== ANÁLISIS VOLUMÉTRICO ===']);
+  rows.push(['Capacidad efectiva peso (kg)',  raw('capEfPeso').replace('kg','').trim()]);
+  rows.push(['Capacidad efectiva volumen (m³)',raw('capEfVol').replace('m³','').trim()]);
+  rows.push(['Peso real de la carga (kg)',     raw('resumenPesoReal').replace('kg','').trim()]);
+  rows.push(['Peso volumétrico (kg)',          raw('resumenPesoVol').replace('kg','').trim()]);
+  rows.push(['Peso facturable (kg)',           raw('resumenPesoFact').replace('kg','').trim()]);
+  rows.push(['Costo / kg facturable (₡)',      raw('costoKg')]);
+  rows.push(['Costo / m³ (₡)',                raw('costoM3')]);
+  rows.push(['Utilización por peso',          raw('utilPesoLbl')]);
+  rows.push(['Utilización por volumen',       raw('utilVolLbl')]);
+
+  rows.push([]);
+  // ── CALCULADORA SKU
+  rows.push(['=== CALCULADORA SKU ===']);
+  rows.push(['Referencia SKU',   $('skuNombre')?.value || '']);
+  rows.push(['Peso / unidad (kg)', $('skuPeso')?.value || '']);
+  rows.push(['Volumen / unidad (m³)', $('skuVol')?.value || '']);
+  rows.push(['Cantidad en ruta (uds)', $('skuQty')?.value || '']);
+  rows.push(['Peso volumétrico / ud (kg)', raw('skuPesoVolUnit')]);
+  rows.push(['Peso facturable / ud (kg)',  raw('skuPesoFactUnit')]);
+  rows.push(['Costo / unidad (₡)',         raw('skuCostoUnit')]);
+  rows.push(['Costo / unidad (USD)',        raw('skuCostoUnitUSD')]);
+  rows.push(['Costo total SKU (₡)',         raw('skuCostoTotal')]);
+  rows.push(['Costo total SKU (USD)',        raw('skuCostoTotalUSD')]);
+  rows.push(['Máx. uds por peso',           raw('skuMaxPeso')]);
+  rows.push(['Máx. uds por volumen',         raw('skuMaxVol')]);
+  rows.push(['Máx. uds efectivo',            raw('skuMaxEf')]);
+
+  // Build CSV string
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob = new Blob(['﻿'+csv], {type:'text/csv;charset=utf-8'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `OLO_Costeo_${ruta.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
